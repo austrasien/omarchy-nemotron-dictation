@@ -16,7 +16,7 @@ Voxtype peut rester installé pour un rollback. Pendant une prise, le toggle arr
 ## Install
 
 ```bash
-git clone <url-de-ce-repo> omarchy-nemotron-dictation
+git clone https://github.com/austrasien/omarchy-nemotron-dictation.git
 cd omarchy-nemotron-dictation
 chmod +x install.sh uninstall.sh
 ./install.sh
