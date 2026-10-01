@@ -51,7 +51,7 @@ S’il existe déjà, il n’est **jamais** écrasé. `uninstall.sh` le garde, s
 - Un mot ou nom par ligne.
 - `#` en début de ligne = commentaire.
 - Lignes vides ignorées.
-- Les accents comptent : `Séverin` n’est pas `Severin`.
+- Les accents comptent : `café` n’est pas `cafe`.
 - Tu peux mettre un sigle (`EPFL`) et sa ville (`Lausanne`) sur deux lignes.
 
 Le client relit le fichier **à chaque prise**. Pas besoin de redémarrer le serveur : Super+Ctrl+X, parle, c’est la nouvelle liste.
