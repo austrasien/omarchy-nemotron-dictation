@@ -1,0 +1,19 @@
+# Dictionnaire de contexte (un mot ou nom par ligne).
+# Copié vers ~/.config/omarchy/nemotron/phrases.txt à l'install
+# UNIQUEMENT si ce fichier n'existe pas encore.
+#
+# Ajoute ici tes noms propres, sigles, outils — ce que le modèle
+# entend mal. Lignes vides et lignes # ignorées.
+#
+# Exemples techniques (remplace / complète par les tiens) :
+
+Omarchy
+Hyprland
+Wayland
+PipeWire
+Quickshell
+Alacritty
+Nemotron
+Voxtype
+Omakoe
+Cursor

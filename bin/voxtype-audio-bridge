@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Omakoe launches `voxtype-audio-bridge` by name. If Voxtype's daemon is up,
+# use the packaged bridge; otherwise follow Nemotron's NDJSON level stream.
+set -euo pipefail
+RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+REAL=/usr/bin/voxtype-audio-bridge
+if [[ -x $REAL && -S $RUNTIME/voxtype/audio.sock ]] && systemctl --user is-active --quiet voxtype.service; then
+  exec "$REAL" "$@"
+fi
+LEVELS="$RUNTIME/nemotron/levels.ndjson"
+mkdir -p "$RUNTIME/nemotron"
+: >>"$LEVELS"
+exec tail -n0 -F "$LEVELS"

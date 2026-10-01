@@ -1,0 +1,10 @@
+# Personal speech-context dictionary — never commit.
+# Users keep theirs at ~/.config/omarchy/nemotron/phrases.txt
+phrases.txt
+**/phrases.txt
+
+# Local junk
+__pycache__/
+*.pyc
+.DS_Store
+*~

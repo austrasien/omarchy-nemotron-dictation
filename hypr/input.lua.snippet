@@ -1,0 +1,7 @@
+-- BEGIN omarchy-nemotron-dictation
+-- Virtual keyboards must not fire Hyprland binds. Dictation types via wtype,
+-- which hotplugs hl-virtual-keyboard-wtype; tearing that device down can
+-- synthesize Escape and would abort the session after the first word.
+hl.device({ name = "hl-virtual-keyboard-wtype", keybinds = false })
+hl.device({ name = "hl-virtual-keyboard-fcitx5", keybinds = false })
+-- END omarchy-nemotron-dictation

@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# Toggle Nemotron 3.5 live dictation. Capture is a systemd user unit so
+# Hyprland's short-lived bind exec cannot lose track of it.
+set -euo pipefail
+
+UNIT=nemotron-dictation-client.service
+HOST=127.0.0.1
+PORT=18765
+RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/nemotron"
+LOCK="$RUNTIME/toggle.lock"
+BIN="${HOME}/.config/omarchy/bin/nemotron-dictation"
+
+mkdir -p "$RUNTIME"
+
+ready() {
+  curl -sf --max-time 1 "http://${HOST}:${PORT}/ready" >/dev/null
+}
+
+ensure_server() {
+  if ready; then
+    return 0
+  fi
+  systemctl --user start nemo-speech.service 2>/dev/null || true
+  local i
+  for i in $(seq 1 60); do
+    ready && return 0
+    sleep 0.5
+  done
+  echo "nemo-speech serve is not ready on ${HOST}:${PORT}" >&2
+  return 1
+}
+
+is_running() {
+  systemctl --user is-active --quiet "$UNIT"
+}
+
+bind_escape() {
+  hyprctl eval "hl.bind(\"Escape\", hl.dsp.exec_cmd(\"${BIN} cancel\"), { description = \"Cancel dictation\" })" >/dev/null
+}
+
+unbind_escape() {
+  hyprctl eval 'hl.unbind("Escape")' >/dev/null 2>&1 || true
+}
+
+start() {
+  if is_running; then
+    echo "already recording"
+    return 0
+  fi
+  ensure_server
+  systemctl --user stop voxtype.service 2>/dev/null || true
+  systemctl --user reset-failed "$UNIT" 2>/dev/null || true
+  systemctl --user start "$UNIT"
+  bind_escape
+  echo "recording"
+}
+
+stop() {
+  unbind_escape
+  systemctl --user stop "$UNIT" 2>/dev/null || true
+  echo idle >"$RUNTIME/state" 2>/dev/null || true
+  echo idle >"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/voxtype/state" 2>/dev/null || true
+  echo "idle"
+}
+
+cancel() {
+  # wtype / fcitx5 can synthesize Escape when the virtual keyboard is
+  # created or destroyed. Ignore those so a real Esc still cancels.
+  local stamp="$RUNTIME/last-type"
+  if [[ -f $stamp ]]; then
+    local now ts
+    now=$(date +%s%N)
+    ts=$(<"$stamp")
+    if [[ $ts =~ ^[0-9]+$ ]] && (( now - ts < 600000000 )); then
+      echo "ignored synthetic escape" >&2
+      return 0
+    fi
+  fi
+  unbind_escape
+  if is_running; then
+    # USR1 drops the leftover buffer. Wait for a clean exit so systemd
+    # stop (SIGINT) cannot still flush and type the leftover words.
+    systemctl --user kill -s USR1 "$UNIT" 2>/dev/null || true
+    local i
+    for i in $(seq 1 25); do
+      is_running || break
+      sleep 0.1
+    done
+    systemctl --user stop "$UNIT" 2>/dev/null || true
+  fi
+  echo idle >"$RUNTIME/state" 2>/dev/null || true
+  echo idle >"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/voxtype/state" 2>/dev/null || true
+  echo "cancelled"
+}
+
+toggle() {
+  exec 9>"$LOCK"
+  flock -n 9 || {
+    echo "toggle busy" >&2
+    return 0
+  }
+  if is_running; then
+    stop
+  else
+    start
+  fi
+}
+
+status() {
+  if is_running; then
+    echo recording
+  else
+    echo idle
+  fi
+}
+
+cmd=${1:-toggle}
+shift || true
+case $cmd in
+  start|stop|toggle|status|cancel) "$cmd" "$@" ;;
+  *)
+    echo "usage: nemotron-dictation {toggle|start|stop|cancel|status}" >&2
+    exit 2
+    ;;
+esac

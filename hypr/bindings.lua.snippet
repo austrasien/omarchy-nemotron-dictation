@@ -1,0 +1,11 @@
+-- BEGIN omarchy-nemotron-dictation
+-- Live French dictation: Nemotron 3.5 sidecar (not Voxtype). Toggle, not
+-- push-to-talk: Hyprland loses the key-release if you type into the focused
+-- window while holding a bind.
+-- Was: Voxtype `record toggle` / F9 PTT. Rollback: disable nemo-speech,
+-- enable --now voxtype, delete this block.
+hl.unbind("SUPER + CTRL + X")
+hl.unbind("F9")
+o.bind("SUPER + CTRL + X", "Toggle dictation", os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation toggle")
+o.bind("F9", "Toggle dictation", os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation toggle")
+-- END omarchy-nemotron-dictation

@@ -1,0 +1,14 @@
+[Unit]
+Description=Nemotron live dictation capture (mic + type)
+After=nemo-speech.service
+BindsTo=nemo-speech.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.config/omarchy/bin/nemotron-dictation-client.py
+KillMode=process
+KillSignal=INT
+TimeoutStopSec=8
+Restart=no
+StandardOutput=journal
+StandardError=journal
