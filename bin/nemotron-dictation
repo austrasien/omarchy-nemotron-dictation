@@ -8,7 +8,6 @@ HOST=127.0.0.1
 PORT=18765
 RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/nemotron"
 LOCK="$RUNTIME/toggle.lock"
-BIN="${HOME}/.config/omarchy/bin/nemotron-dictation"
 
 mkdir -p "$RUNTIME"
 
@@ -34,12 +33,10 @@ is_running() {
   systemctl --user is-active --quiet "$UNIT"
 }
 
-bind_escape() {
-  hyprctl eval "hl.bind(\"Escape\", hl.dsp.exec_cmd(\"${BIN} cancel\"), { description = \"Cancel dictation\" })" >/dev/null
-}
-
-unbind_escape() {
-  hyprctl eval 'hl.unbind("Escape")' >/dev/null 2>&1 || true
+# The client enters the "dictation" submap (bindings.lua): any key finishes,
+# Esc cancels. Reset here too in case the client died without cleaning up.
+reset_submap() {
+  hyprctl eval "hl.dispatch(hl.dsp.submap('reset'))" >/dev/null 2>&1 || true
 }
 
 start() {
@@ -51,13 +48,12 @@ start() {
   systemctl --user stop voxtype.service 2>/dev/null || true
   systemctl --user reset-failed "$UNIT" 2>/dev/null || true
   systemctl --user start "$UNIT"
-  bind_escape
   echo "recording"
 }
 
 stop() {
-  unbind_escape
   systemctl --user stop "$UNIT" 2>/dev/null || true
+  reset_submap
   echo idle >"$RUNTIME/state" 2>/dev/null || true
   echo idle >"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/voxtype/state" 2>/dev/null || true
   echo "idle"
@@ -76,7 +72,6 @@ cancel() {
       return 0
     fi
   fi
-  unbind_escape
   if is_running; then
     # USR1 drops the leftover buffer. Wait for a clean exit so systemd
     # stop (SIGINT) cannot still flush and type the leftover words.
@@ -88,6 +83,7 @@ cancel() {
     done
     systemctl --user stop "$UNIT" 2>/dev/null || true
   fi
+  reset_submap
   echo idle >"$RUNTIME/state" 2>/dev/null || true
   echo idle >"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/voxtype/state" 2>/dev/null || true
   echo "cancelled"

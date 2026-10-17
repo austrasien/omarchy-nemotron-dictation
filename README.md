@@ -9,7 +9,7 @@ Voxtype peut rester installé pour un rollback. Pendant une prise, le toggle arr
 ## Prérequis
 
 - Omarchy (Hyprland Lua)
-- `python3`, `wtype`, `pw-record`, `wpctl`, `curl`
+- `python3`, `wtype`, `wl-copy`, `notify-send`, `pw-record`, `wpctl`, `curl`
 - ~1 Go disque (binaire CPU + GGUF Q8 ~700 Mo)
 - CPU raisonnable (pas besoin de NVIDIA)
 
@@ -30,9 +30,26 @@ Touches après install :
 | Raccourci | Effet |
 |---|---|
 | Super+Ctrl+X ou F9 | toggle (start / stop + envoi du reliquat) |
+| N’importe quelle touche (pendant une prise) | stop + fin de la transcription ; la touche est avalée |
 | Échap (pendant une prise) | annuler, ne tape pas le reliquat |
 
 10 secondes sans parole = stop + flush automatique. Le média est baissé pendant la prise.
+
+Pendant la prise, Hyprland est dans le submap `dictation` (un `catchall`). Le client en sort le temps de chaque appel `wtype`, sinon ses propres frappes seraient avalées.
+
+## Presse-papiers et fenêtres protégées
+
+Chaque dictée terminée est copiée dans le presse-papiers (`wl-copy`), qu’elle ait été tapée ou non. Elle écrase donc le contenu précédent.
+
+`wtype` tape dans la fenêtre qui a le focus, quelle qu’elle soit. Dans un gestionnaire de fichiers, les lettres deviennent des raccourcis (une dictée dans Nautilus a déjà mis un dossier à la corbeille). Le client ne tape donc **pas** :
+
+- dans les gestionnaires de fichiers (Nautilus, Thunar, Nemo, PCManFM, Dolphin, Caja) ni dans Yazi / ranger / lf / nnn (repérés au titre) ;
+- si fcitx5 ne voit aucun champ de saisie au premier mot ;
+- si la fenêtre active change en cours de prise.
+
+Dans ces cas, une notification indique que la dictée est dans le presse-papiers (Ctrl+V). Pour ajouter des fenêtres : `~/.config/omarchy/nemotron/no-type-windows.txt`, une regex par ligne, comparée à `classe | titre` de la fenêtre active.
+
+Limite : un terminal compte toujours comme un champ actif (Vim en mode normal recevrait les frappes).
 
 ## Dictionnaire de noms (`phrases.txt`)
 

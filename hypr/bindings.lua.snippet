@@ -8,4 +8,12 @@ hl.unbind("SUPER + CTRL + X")
 hl.unbind("F9")
 o.bind("SUPER + CTRL + X", "Toggle dictation", os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation toggle")
 o.bind("F9", "Toggle dictation", os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation toggle")
+
+-- While dictating, any key stops and finishes the transcription (the key is
+-- swallowed); Esc cancels. The client leaves this submap around every wtype
+-- call: bind device filters can't reliably tell wtype from the real keyboard.
+hl.define_submap("dictation", function()
+  hl.bind("Escape", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation cancel"), { description = "Cancel dictation" })
+  hl.bind("catchall", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation stop"), { description = "Finish dictation" })
+end)
 -- END omarchy-nemotron-dictation

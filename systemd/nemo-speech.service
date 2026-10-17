@@ -6,6 +6,9 @@ After=graphical-session.target
 
 [Service]
 Type=simple
+# Omakoe + the Dictation indicator watch $XDG_RUNTIME_DIR/voxtype/state.
+# Create it before the shell's FileView first-reads, or the HUD never shows.
+ExecStartPre=/bin/bash -c 'mkdir -p "${XDG_RUNTIME_DIR}/voxtype" "${XDG_RUNTIME_DIR}/nemotron"; printf idle >"${XDG_RUNTIME_DIR}/voxtype/state"; printf idle >"${XDG_RUNTIME_DIR}/nemotron/state"; : >>"${XDG_RUNTIME_DIR}/nemotron/levels.ndjson"'
 ExecStart=%h/.local/bin/nemo-speech serve --asr-model nemotron-3.5 --device cpu --host 127.0.0.1 --port 18765 --no-ui
 Restart=on-failure
 RestartSec=3
