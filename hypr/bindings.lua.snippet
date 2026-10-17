@@ -11,7 +11,7 @@ o.bind("F9", "Toggle dictation", os.getenv("HOME") .. "/.config/omarchy/bin/nemo
 
 -- While dictating, any key stops and finishes the transcription; Esc cancels.
 -- The catchall holds the key back so it can't land mid-transcript; the client
--- replays it (nemotron_keys_replay) once the dictated text is typed. The
+-- replays it (nemotron_keys_dump + wtype) once the dictated text is typed. The
 -- client leaves this submap around every wtype call: bind device filters
 -- can't reliably tell wtype from the real keyboard.
 hl.define_submap("dictation", function()
@@ -62,13 +62,18 @@ function nemotron_keys_clear()
   dictation_keys = {}
 end
 
--- window: optional selector (tests); defaults to the active window.
-function nemotron_keys_replay(window)
+-- The client replays them with wtype (send_shortcut didn't reach a focused
+-- text field): write "keycode mods" lines to path, then forget them.
+function nemotron_keys_dump(path)
   local keys = dictation_keys
   dictation_keys = {}
-  for _, k in ipairs(keys) do
-    hl.dispatch(hl.dsp.send_shortcut({ mods = k.mods, key = "code:" .. k.code, window = window }))
+  local f = io.open(path, "w")
+  if not f then
+    return
   end
-  return #keys
+  for _, k in ipairs(keys) do
+    f:write(k.code .. " " .. k.mods .. "\n")
+  end
+  f:close()
 end
 -- END omarchy-nemotron-dictation

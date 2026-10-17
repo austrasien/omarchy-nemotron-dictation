@@ -35,7 +35,7 @@ Touches après install :
 
 10 secondes sans parole = stop + flush automatique. Le média est baissé pendant la prise.
 
-Pendant la prise, Hyprland est dans le submap `dictation` (un `catchall`) : les touches sont retenues (avec Shift / Ctrl / Alt / AltGr) et renvoyées dans l’ordre à la fenêtre une fois le texte dicté tapé (`send_shortcut`). Les raccourcis avec Super et F9 ne sont pas renvoyés. Le client sort du submap le temps de chaque appel `wtype`, sinon ses propres frappes seraient retenues.
+Pendant la prise, Hyprland est dans le submap `dictation` (un `catchall`) : les touches sont retenues (avec Shift / Ctrl / Alt / AltGr) et retapées dans l’ordre avec `wtype` une fois le texte dicté tapé (keycodes traduits via xkbcommon avec la disposition `input:kb_*` d’Hyprland). Les raccourcis avec Super et F9 ne sont pas renvoyés. Le client sort du submap le temps de chaque appel `wtype`, sinon ses propres frappes seraient retenues.
 
 ## Presse-papiers et fenêtres protégées
 

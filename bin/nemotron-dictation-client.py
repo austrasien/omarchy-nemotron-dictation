@@ -7,6 +7,7 @@ Open (incomplete) words are typed live. If the ASR revises a hypothesis
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import re
@@ -239,8 +240,8 @@ def typing_target(committed: str, partial: str = "") -> str:
 class KeyStop:
     """Hyprland submap "dictation": a real key press stops and finishes.
 
-    The submap holds the key back (bindings.lua records it); disarm() replays
-    it into the window once the dictation is typed, so it lands after it.
+    The submap holds the key back (bindings.lua records it); disarm() types
+    it with wtype once the dictation is typed, so it lands after it.
 
     The catchall would also swallow wtype's own keys, and bind device filters
     can't reliably tell the wtype virtual keyboard apart. So we leave the
@@ -279,7 +280,20 @@ class KeyStop:
             return
         cls.active = False
         cls._submap("reset")
-        cls._eval("nemotron_keys_replay()" if replay else "nemotron_keys_clear()")
+        if not replay:
+            cls._eval("nemotron_keys_clear()")
+            return
+        path = runtime_dir() / "nemotron" / "held-keys"
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        cls._eval(f"nemotron_keys_dump('{path}')")
+        try:
+            held = path.read_text().splitlines()
+        except OSError:
+            held = []
+        replay_keys(held)
 
     @classmethod
     def run_unguarded(cls, cmd: list[str], timeout: float) -> None:
@@ -290,6 +304,100 @@ class KeyStop:
         finally:
             if cls.active:
                 cls._submap("dictation")
+
+
+class Keymap:
+    """xkbcommon keymap built from Hyprland's input:kb_* options.
+
+    Turns the held-back xkb keycodes + modifiers into keysym names for wtype.
+    """
+
+    _MOD_NAMES = {"SHIFT": b"Shift", "MOD5": b"Mod5"}
+
+    class _Names(ctypes.Structure):
+        _fields_ = [(n, ctypes.c_char_p) for n in ("rules", "model", "layout", "variant", "options")]
+
+    def __init__(self) -> None:
+        x = ctypes.CDLL("libxkbcommon.so.0")
+        x.xkb_context_new.restype = ctypes.c_void_p
+        x.xkb_keymap_new_from_names.restype = ctypes.c_void_p
+        x.xkb_keymap_new_from_names.argtypes = [ctypes.c_void_p, ctypes.POINTER(self._Names), ctypes.c_int]
+        x.xkb_state_new.restype = ctypes.c_void_p
+        x.xkb_state_new.argtypes = [ctypes.c_void_p]
+        x.xkb_keymap_mod_get_index.restype = ctypes.c_uint32
+        x.xkb_keymap_mod_get_index.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        x.xkb_state_update_mask.argtypes = [ctypes.c_void_p] + [ctypes.c_uint32] * 6
+        x.xkb_state_key_get_one_sym.restype = ctypes.c_uint32
+        x.xkb_state_key_get_one_sym.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        x.xkb_keysym_get_name.argtypes = [ctypes.c_uint32, ctypes.c_char_p, ctypes.c_size_t]
+        self.x = x
+        names = self._Names(*(self._option(n) for n in ("kb_rules", "kb_model", "kb_layout", "kb_variant", "kb_options")))
+        ctx = x.xkb_context_new(0)
+        self.keymap = x.xkb_keymap_new_from_names(ctx, ctypes.byref(names), 0) if ctx else None
+        if not self.keymap:
+            raise RuntimeError("xkb keymap")
+        self.state = x.xkb_state_new(self.keymap)
+
+    @staticmethod
+    def _option(name: str) -> bytes | None:
+        try:
+            out = subprocess.check_output(["hyprctl", "getoption", f"input:{name}", "-j"], text=True, timeout=1)
+            value = json.loads(out).get("str") or ""
+        except (subprocess.SubprocessError, FileNotFoundError, json.JSONDecodeError):
+            value = ""
+        return value.encode() or None
+
+    def keysym(self, code: int, mods: list[str]) -> str:
+        mask = 0
+        for m in mods:
+            if m in self._MOD_NAMES:
+                mask |= 1 << self.x.xkb_keymap_mod_get_index(self.keymap, self._MOD_NAMES[m])
+        self.x.xkb_state_update_mask(self.state, mask, 0, 0, 0, 0, 0)
+        sym = self.x.xkb_state_key_get_one_sym(self.state, code)
+        if not sym:
+            return ""
+        buf = ctypes.create_string_buffer(64)
+        self.x.xkb_keysym_get_name(sym, buf, len(buf))
+        return buf.value.decode()
+
+
+def replay_keys(held: list[str]) -> None:
+    """Type keys pressed during the take ("keycode MODS..." lines), in order."""
+    if not held:
+        log("replay: no key held")
+        return
+    try:
+        keymap = Keymap()
+    except (OSError, RuntimeError) as exc:
+        log(f"replay: no keymap ({exc}), dropped {len(held)} key(s)")
+        return
+    cmd = ["wtype"]
+    names = []
+    for line in held:
+        parts = line.split()
+        if not parts or not parts[0].isdigit():
+            continue
+        mods = parts[1:]
+        sym = keymap.keysym(int(parts[0]), mods)
+        if not sym:
+            continue
+        chord = [m for m in ("ctrl", "alt") if m.upper() in mods]
+        for m in chord:
+            cmd += ["-M", m]
+        cmd += ["-k", sym]
+        for m in reversed(chord):
+            cmd += ["-m", m]
+        names.append("+".join(chord + [sym]))
+    if not names:
+        return
+    log(f"replay {names}")
+    mark_typing()
+    try:
+        subprocess.run(cmd, check=False, timeout=5)
+    except (subprocess.SubprocessError, FileNotFoundError) as exc:
+        log(f"replay failed: {exc}")
+    finally:
+        mark_typing()
 
 
 def mark_typing() -> None:
