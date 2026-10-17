@@ -11,39 +11,32 @@ o.bind("F9", "Toggle dictation", os.getenv("HOME") .. "/.config/omarchy/bin/nemo
 
 -- While dictating, any key stops and finishes the transcription; Esc cancels.
 -- The catchall holds the key back so it can't land mid-transcript; the client
--- replays it (nemotron_keys_dump + wtype) once the dictated text is typed. The
+-- types it (nemotron_keys_dump + wtype) once the dictated text is typed. The
 -- client leaves this submap around every wtype call: bind device filters
 -- can't reliably tell wtype from the real keyboard.
-hl.define_submap("dictation", function()
-  hl.bind("Escape", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation cancel"), { description = "Cancel dictation" })
-  hl.bind("catchall", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation stop"), { description = "Finish dictation" })
-end)
+local DICTATION_BIN = os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation"
 
--- Keys held back by the "dictation" submap, in order, with their modifiers
--- (xkb keycodes: the event reports none, so read them with is_key_down).
+-- Held-back keys, in order (xkb keycodes + modifiers). The key event fires
+-- for every keyboard, wtype and fcitx5 included, and carries no modifiers;
+-- the catchall only fires for keys it swallows. So the event notes the key
+-- and the catchall, which runs right after it, keeps it.
 local dictation_keys = {}
-local dictation_last_event = nil
+local dictation_pending = nil
 local dictation_mods = {
   { "SHIFT", { 50, 62 } },
   { "CTRL", { 37, 105 } },
   { "ALT", { 64 } },
   { "MOD5", { 108 } }, -- AltGr
 }
-local DICTATION_SKIP = { [9] = true, [75] = true } -- Esc cancels, F9 toggles
-local DICTATION_MODIFIER = { [50] = true, [62] = true, [37] = true, [105] = true, [64] = true, [108] = true, [133] = true, [134] = true }
+-- Modifiers alone, F9 (toggle) and Super chords stop the take but aren't typed.
+local DICTATION_SKIP = { [75] = true, [50] = true, [62] = true, [37] = true, [105] = true, [64] = true, [108] = true, [133] = true, [134] = true }
 
-hl.on("input.keyboard.key", function(code, time, state)
+hl.on("input.keyboard.key", function(code, _time, state)
   if state ~= 1 or hl.get_current_submap() ~= "dictation" then
     return
   end
-  -- Some presses are reported twice with the same timestamp.
-  local id = code .. ":" .. time
-  if id == dictation_last_event then
-    return
-  end
-  dictation_last_event = id
-  -- Super chords are compositor shortcuts, not text: don't replay them.
-  if DICTATION_SKIP[code] or DICTATION_MODIFIER[code] or hl.is_key_down(133) or hl.is_key_down(134) then
+  if DICTATION_SKIP[code] or hl.is_key_down(133) or hl.is_key_down(134) then
+    dictation_pending = nil
     return
   end
   local mods = {}
@@ -55,18 +48,29 @@ hl.on("input.keyboard.key", function(code, time, state)
       end
     end
   end
-  table.insert(dictation_keys, { code = code, mods = table.concat(mods, " ") })
+  dictation_pending = { code = code, mods = table.concat(mods, " ") }
+end)
+
+hl.define_submap("dictation", function()
+  hl.bind("Escape", hl.dsp.exec_cmd(DICTATION_BIN .. " cancel"), { description = "Cancel dictation" })
+  hl.bind("catchall", function()
+    if dictation_pending then
+      table.insert(dictation_keys, dictation_pending)
+      dictation_pending = nil
+    end
+    hl.exec_cmd(DICTATION_BIN .. " stop")
+  end, { ignore_mods = true, description = "Finish dictation" })
 end)
 
 function nemotron_keys_clear()
   dictation_keys = {}
+  dictation_pending = nil
 end
 
--- The client replays them with wtype (send_shortcut didn't reach a focused
--- text field): write "keycode mods" lines to path, then forget them.
+-- Write "keycode mods" lines to path for the client, then forget them.
 function nemotron_keys_dump(path)
   local keys = dictation_keys
-  dictation_keys = {}
+  nemotron_keys_clear()
   local f = io.open(path, "w")
   if not f then
     return
