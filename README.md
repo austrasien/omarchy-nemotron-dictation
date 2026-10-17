@@ -30,12 +30,12 @@ Touches après install :
 | Raccourci | Effet |
 |---|---|
 | Super+Ctrl+X ou F9 | toggle (start / stop + envoi du reliquat) |
-| N’importe quelle touche (pendant une prise) | stop + fin de la transcription ; la touche est avalée |
+| N’importe quelle touche (pendant une prise) | stop + fin de la transcription, puis la touche est saisie |
 | Échap (pendant une prise) | annuler, ne tape pas le reliquat |
 
 10 secondes sans parole = stop + flush automatique. Le média est baissé pendant la prise.
 
-Pendant la prise, Hyprland est dans le submap `dictation` (un `catchall`). Le client en sort le temps de chaque appel `wtype`, sinon ses propres frappes seraient avalées.
+Pendant la prise, Hyprland est dans le submap `dictation` (un `catchall`) : les touches sont retenues (avec Shift / Ctrl / Alt / AltGr) et renvoyées dans l’ordre à la fenêtre une fois le texte dicté tapé (`send_shortcut`). Les raccourcis avec Super et F9 ne sont pas renvoyés. Le client sort du submap le temps de chaque appel `wtype`, sinon ses propres frappes seraient retenues.
 
 ## Presse-papiers et fenêtres protégées
 

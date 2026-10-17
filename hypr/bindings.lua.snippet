@@ -9,11 +9,66 @@ hl.unbind("F9")
 o.bind("SUPER + CTRL + X", "Toggle dictation", os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation toggle")
 o.bind("F9", "Toggle dictation", os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation toggle")
 
--- While dictating, any key stops and finishes the transcription (the key is
--- swallowed); Esc cancels. The client leaves this submap around every wtype
--- call: bind device filters can't reliably tell wtype from the real keyboard.
+-- While dictating, any key stops and finishes the transcription; Esc cancels.
+-- The catchall holds the key back so it can't land mid-transcript; the client
+-- replays it (nemotron_keys_replay) once the dictated text is typed. The
+-- client leaves this submap around every wtype call: bind device filters
+-- can't reliably tell wtype from the real keyboard.
 hl.define_submap("dictation", function()
   hl.bind("Escape", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation cancel"), { description = "Cancel dictation" })
   hl.bind("catchall", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/omarchy/bin/nemotron-dictation stop"), { description = "Finish dictation" })
 end)
+
+-- Keys held back by the "dictation" submap, in order, with their modifiers
+-- (xkb keycodes: the event reports none, so read them with is_key_down).
+local dictation_keys = {}
+local dictation_last_event = nil
+local dictation_mods = {
+  { "SHIFT", { 50, 62 } },
+  { "CTRL", { 37, 105 } },
+  { "ALT", { 64 } },
+  { "MOD5", { 108 } }, -- AltGr
+}
+local DICTATION_SKIP = { [9] = true, [75] = true } -- Esc cancels, F9 toggles
+local DICTATION_MODIFIER = { [50] = true, [62] = true, [37] = true, [105] = true, [64] = true, [108] = true, [133] = true, [134] = true }
+
+hl.on("input.keyboard.key", function(code, time, state)
+  if state ~= 1 or hl.get_current_submap() ~= "dictation" then
+    return
+  end
+  -- Some presses are reported twice with the same timestamp.
+  local id = code .. ":" .. time
+  if id == dictation_last_event then
+    return
+  end
+  dictation_last_event = id
+  -- Super chords are compositor shortcuts, not text: don't replay them.
+  if DICTATION_SKIP[code] or DICTATION_MODIFIER[code] or hl.is_key_down(133) or hl.is_key_down(134) then
+    return
+  end
+  local mods = {}
+  for _, m in ipairs(dictation_mods) do
+    for _, c in ipairs(m[2]) do
+      if hl.is_key_down(c) then
+        table.insert(mods, m[1])
+        break
+      end
+    end
+  end
+  table.insert(dictation_keys, { code = code, mods = table.concat(mods, " ") })
+end)
+
+function nemotron_keys_clear()
+  dictation_keys = {}
+end
+
+-- window: optional selector (tests); defaults to the active window.
+function nemotron_keys_replay(window)
+  local keys = dictation_keys
+  dictation_keys = {}
+  for _, k in ipairs(keys) do
+    hl.dispatch(hl.dsp.send_shortcut({ mods = k.mods, key = "code:" .. k.code, window = window }))
+  end
+  return #keys
+end
 -- END omarchy-nemotron-dictation

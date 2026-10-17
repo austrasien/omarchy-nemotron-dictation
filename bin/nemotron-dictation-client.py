@@ -239,6 +239,9 @@ def typing_target(committed: str, partial: str = "") -> str:
 class KeyStop:
     """Hyprland submap "dictation": a real key press stops and finishes.
 
+    The submap holds the key back (bindings.lua records it); disarm() replays
+    it into the window once the dictation is typed, so it lands after it.
+
     The catchall would also swallow wtype's own keys, and bind device filters
     can't reliably tell the wtype virtual keyboard apart. So we leave the
     submap for the duration of each wtype call (~3 ms per switch).
@@ -247,12 +250,12 @@ class KeyStop:
     active = False
 
     @staticmethod
-    def _submap(name: str) -> None:
+    def _eval(code: str) -> None:
         try:
             subprocess.run(
-                ["hyprctl", "eval", f"hl.dispatch(hl.dsp.submap('{name}'))"],
+                ["hyprctl", "eval", code],
                 check=False,
-                timeout=1,
+                timeout=2,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -260,14 +263,23 @@ class KeyStop:
             pass
 
     @classmethod
+    def _submap(cls, name: str) -> None:
+        cls._eval(f"hl.dispatch(hl.dsp.submap('{name}'))")
+
+    @classmethod
     def arm(cls) -> None:
         cls.active = True
+        cls._eval("nemotron_keys_clear()")
         cls._submap("dictation")
 
     @classmethod
-    def disarm(cls) -> None:
+    def disarm(cls, replay: bool) -> None:
+        """Leave the submap, then type the held-back keys after the dictation."""
+        if not cls.active:
+            return
         cls.active = False
         cls._submap("reset")
+        cls._eval("nemotron_keys_replay()" if replay else "nemotron_keys_clear()")
 
     @classmethod
     def run_unguarded(cls, cmd: list[str], timeout: float) -> None:
@@ -872,7 +884,7 @@ def main() -> int:
         log(f"fail: {exc}")
         return 1
     finally:
-        KeyStop.disarm()
+        KeyStop.disarm(replay=not Flags.abort)
         ime.restore()
         duck.restore()
         write_state("idle")
